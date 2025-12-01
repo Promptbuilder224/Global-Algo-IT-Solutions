@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Global Algo IT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#007a80',   /* Updated Teal from Logo */
+              'brand-secondary': '#004d40', /* Darker interaction state */
+              'brand-light': '#4db6ac',     /* Teal 300 - Highlights/Accents */
+              'brand-black': '#000000',     /* Black */
+              'gray-800': '#1f2937',
+              'gray-900': '#111827'
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @keyframes blink-fade {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      .animate-blink-fade {
+        animation: blink-fade 1s infinite;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.5",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "bcryptjs": "https://aistudiocdn.com/bcryptjs@^3.0.3",
+    "fs": "https://aistudiocdn.com/fs@^0.0.1-security",
+    "fastify": "https://aistudiocdn.com/fastify@^5.6.2",
+    "@fastify/cors": "https://aistudiocdn.com/@fastify/cors@^11.1.0",
+    "@fastify/formbody": "https://aistudiocdn.com/@fastify/formbody@^8.0.2",
+    "@fastify/cookie": "https://aistudiocdn.com/@fastify/cookie@^11.0.2",
+    "dotenv": "https://aistudiocdn.com/dotenv@^17.2.3",
+    "better-sqlite3": "https://aistudiocdn.com/better-sqlite3@^12.4.1",
+    "twilio": "https://aistudiocdn.com/twilio@^5.10.5",
+    "ioredis": "https://aistudiocdn.com/ioredis@^5.8.2",
+    "process": "https://aistudiocdn.com/process@^0.11.10"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-900 text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
