@@ -6,12 +6,11 @@ A robust Node.js + TypeScript backend supporting the Lead Management System, fea
 
 *   **`src/server.ts`**: Entry point. Handles HTTP routes, Auth, and Audit logging.
 *   **`src/whatsapp/`**: Dedicated module for WhatsApp logic.
-    *   **`db.ts`**: SQLite connection and migration runner.
     *   **`adapter/`**: Third-party providers (Twilio) abstraction.
     *   **`api/`**: REST endpoints for Campaigns and Webhooks.
     *   **`workers/`**: Background worker for processing the message queue (Redis).
 *   **`migrations/`**: SQL files for database schema updates.
-*   **`data/`**: Runtime storage for SQLite DB and Audit logs (ignored by git).
+    *   **`db.ts`**: MongoDB connection and collection helpers.
 
 ## Setup & Installation
 
@@ -28,13 +27,20 @@ A robust Node.js + TypeScript backend supporting the Lead Management System, fea
     ```
     *   **Twilio**: Required for sending WhatsApp messages.
     *   **Redis**: Required for the message queue. Ensure Redis is running (`redis-server`).
+   
+3.  **MongoDB** (WhatsApp storage):
+    *   Set `MONGO_URI` and `MONGO_DB` in `.env` (defaults to mongodb://localhost:27017 and `global_algo_whatsapp`).
+    *   If you have a legacy sqlite DB at `data/whatsapp.db` you can migrate it to MongoDB with:
+        ```bash
+        npm run migrate:sqlite-to-mongo
+        ```
 
 3.  **Run Development Server**:
     ```bash
     npm run dev
     ```
     *   Runs on `http://localhost:3001`.
-    *   Automatically runs migrations from `migrations/001_whatsapp.sql`.
+    *   Uses MongoDB for WhatsApp storage. Set `MONGO_URI` and `MONGO_DB` in `.env` to point to your database.
     *   Starts the internal background worker (if `ENABLE_WORKER=true`).
 
 ## Production Build
@@ -49,6 +55,14 @@ A robust Node.js + TypeScript backend supporting the Lead Management System, fea
     ```
     *   Ensure the `migrations/` folder is present in the working directory when running the build.
 
+## Tests
+
+Run the unit/integration tests (they use an in-memory MongoDB instance):
+
+```
+npm run test
+```
+
 ## WhatsApp Integration (Twilio Sandbox)
 
 1.  **Configure Twilio**:
@@ -56,7 +70,7 @@ A robust Node.js + TypeScript backend supporting the Lead Management System, fea
     *   In Twilio Console, set the WhatsApp Sandbox Webhook to: `${PUBLIC_URL}/api/whatsapp/webhook`.
 2.  **Opt-In**:
     *   Users must join your sandbox (e.g., send `join <keyword>` to the sandbox number) before you can message them.
-    *   The database migration seeds a test user. Update `data/whatsapp.db` -> `clients` table with your real sandbox number for testing.
+    *   The server will seed a few sample clients into MongoDB on first startup (if the clients collection is empty). Update the `clients` collection with your real sandbox number for testing.
 
 ## API Endpoints
 

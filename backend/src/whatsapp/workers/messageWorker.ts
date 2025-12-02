@@ -1,6 +1,6 @@
 
 import Redis from 'ioredis';
-import db from '../db';
+import db, { updateMessageById, getClientByPhone } from '../db';
 import { sendMessage } from '../adapter/twilioAdapter';
 
 const STREAM_KEY = 'whatsapp_queue';
@@ -44,7 +44,7 @@ export async function startWorker() {
 
       if (!results) continue;
 
-      const [_, messages] = results[0];
+      const [_, messages] = results[0] as any;
       
       for (const [id, fields] of messages) {
         const data: Record<string, string> = {};
@@ -69,16 +69,14 @@ async function processMessage(streamId: string, data: any) {
   console.log(`Processing message ${message_id} for ${client_phone}`);
 
   // 1. Update status to processing
-  const stmtUpdate = db.prepare('UPDATE messages SET status = ? WHERE id = ?');
-  stmtUpdate.run('sending', message_id);
+  await updateMessageById(message_id, { status: 'sending' });
 
   // 2. Check Opt-in
-  const client = db.prepare('SELECT opt_in FROM clients WHERE phone = ?').get(client_phone) as { opt_in: number } | undefined;
+  const client = await getClientByPhone(client_phone) as { opt_in: boolean } | undefined;
 
-  if (!client || client.opt_in !== 1) {
+  if (!client || client.opt_in !== true) {
     console.log(`Skipping ${client_phone}: Not opted in.`);
-    const stmtSkip = db.prepare('UPDATE messages SET status = ?, error_code = ? WHERE id = ?');
-    stmtSkip.run('skipped_opt_out', 'CONSENT_REQUIRED', message_id);
+    await updateMessageById(message_id, { status: 'skipped_opt_out', error_code: 'CONSENT_REQUIRED' });
     return;
   }
 
@@ -87,10 +85,8 @@ async function processMessage(streamId: string, data: any) {
 
   // 4. Update DB result
   if (result.success) {
-    const stmtSuccess = db.prepare('UPDATE messages SET status = ?, provider_sid = ? WHERE id = ?');
-    stmtSuccess.run('sent', result.sid, message_id);
+    await updateMessageById(message_id, { status: 'sent', provider_sid: result.sid });
   } else {
-    const stmtFail = db.prepare('UPDATE messages SET status = ?, error_code = ? WHERE id = ?');
-    stmtFail.run('failed', result.error, message_id);
+    await updateMessageById(message_id, { status: 'failed', error_code: result.error });
   }
 }

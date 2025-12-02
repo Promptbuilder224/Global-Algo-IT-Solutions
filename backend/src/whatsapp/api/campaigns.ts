@@ -2,11 +2,23 @@
 import { FastifyInstance } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 import Redis from 'ioredis';
-import db from '../db';
+import db, {
+  createCampaign,
+  getCampaignById,
+  getOptedInClients,
+  insertMessage,
+  updateCampaignStatus,
+  getMessageStats
+} from '../db';
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '6379')
+});
+
+// Avoid throwing unhandled errors when Redis is not available during dev
+redis.on('error', (err: any) => {
+  console.warn('[Redis] connection error:', err && err.message ? err.message : err);
 });
 
 const STREAM_KEY = 'whatsapp_queue';
@@ -18,10 +30,9 @@ export async function campaignRoutes(server: FastifyInstance) {
     const { name, template_body } = req.body as { name: string; template_body: string };
     if (!name || !template_body) return reply.code(400).send({ error: 'Missing fields' });
 
-    const stmt = db.prepare('INSERT INTO campaigns (name, template_body) VALUES (?, ?)');
-    const info = stmt.run(name, template_body);
-
-    return { id: info.lastInsertRowid, name, status: 'draft' };
+    const campaignId = uuidv4();
+    const res = await createCampaign({ id: campaignId, name, template_body });
+    return { id: campaignId, name, status: 'draft' };
   });
 
   // Start Campaign (Enqueue)
@@ -29,41 +40,42 @@ export async function campaignRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     
     // 1. Get Campaign
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(id) as any;
+    const campaign = await getCampaignById(id) as any;
     if (!campaign) return reply.code(404).send({ error: 'Campaign not found' });
 
     // 2. Get Opted-in Clients
-    const clients = db.prepare('SELECT phone FROM clients WHERE opt_in = 1').all() as { phone: string }[];
+    const clients = await getOptedInClients() as { phone: string }[];
     
     if (clients.length === 0) return { message: 'No eligible contacts found.' };
 
     // 3. Batch Enqueue
-    const stmtMsg = db.prepare('INSERT INTO messages (id, campaign_id, client_phone, status) VALUES (?, ?, ?, ?)');
+    const stmtMsg = insertMessage;
     
     const pipeline = redis.pipeline();
     let queuedCount = 0;
 
-    const transaction = db.transaction(() => {
-      for (const client of clients) {
-        const messageId = uuidv4();
-        // Insert DB
-        stmtMsg.run(messageId, id, client.phone, 'queued');
-        
-        // Add to Redis Stream
-        pipeline.xadd(STREAM_KEY, '*', 
-          'message_id', messageId,
-          'client_phone', client.phone,
-          'template_body', campaign.template_body
-        );
-        queuedCount++;
-      }
-    });
+    for (const client of clients) {
+      const messageId = uuidv4();
+      // Insert DB
+      await stmtMsg({ id: messageId, campaign_id: id, client_phone: client.phone, status: 'queued' });
 
-    transaction();
-    await pipeline.exec();
+      // Add to Redis Stream
+      pipeline.xadd(STREAM_KEY, '*', 
+        'message_id', messageId,
+        'client_phone', client.phone,
+        'template_body', campaign.template_body
+      );
+      queuedCount++;
+    }
+    try {
+      await pipeline.exec();
+    } catch (err: any) {
+      // If Redis is unavailable, log and continue — messages are already inserted in DB
+      console.warn('[Redis] pipeline.exec failed - Redis may be down:', err && err.message ? err.message : err);
+    }
 
     // Update Campaign Status
-    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('processing', id);
+    await updateCampaignStatus(id, 'processing');
 
     return { success: true, queued: queuedCount };
   });
@@ -71,8 +83,8 @@ export async function campaignRoutes(server: FastifyInstance) {
   // Get Campaign Status
   server.get('/api/campaigns/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(id);
-    const stats = db.prepare('SELECT status, COUNT(*) as count FROM messages WHERE campaign_id = ? GROUP BY status').all(id);
+    const campaign = await getCampaignById(id);
+    const stats = await getMessageStats(id);
     
     return { campaign, stats };
   });

@@ -1,5 +1,6 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import fs from 'fs';
@@ -49,13 +50,7 @@ const PORT = parseInt(process.env.PORT || '3001');
 // --- INITIALIZATION ---
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// Init WhatsApp DB
-initDb();
-
-// Start Worker in Background (For PoC only)
-if (process.env.ENABLE_WORKER === 'true') {
-  startWorker().catch(err => console.error('Worker failed to start:', err));
-}
+// DB will be initialized during server startup to ensure connection is ready
 
 // Seed Mock Users (Matching frontend constants)
 const SEED_USERS = [
@@ -100,9 +95,15 @@ server.register(cookie, {
 
 server.register(formbody);
 
+// Serve UI static files from backend/public
+server.register(fastifyStatic, {
+  root: path.join(__dirname, '..', 'public'),
+  prefix: '/',
+  wildcard: false
+});
+
 // Register WhatsApp API Routes
-server.register(campaignRoutes);
-server.register(webhookRoutes);
+// WhatsApp API routes will be registered once DB is initialized (see start())
 
 // --- HELPERS ---
 function logAudit(event: any) {
@@ -271,6 +272,18 @@ server.get('/api/modules/:moduleName', async (req: FastifyRequest<{ Params: { mo
 // Start
 const start = async () => {
   try {
+    // Ensure DB is initialized before registering whatsapp routes
+    await initDb();
+
+    // Register WhatsApp routes now DB is ready
+    server.register(campaignRoutes);
+    server.register(webhookRoutes);
+
+    // Start Worker in Background (For PoC only)
+    if (process.env.ENABLE_WORKER === 'true') {
+      startWorker().catch(err => console.error('Worker failed to start:', err));
+    }
+
     await server.listen({ port: PORT, host: '0.0.0.0' });
     console.log(`Backend running at http://localhost:${PORT}`);
   } catch (err) {
